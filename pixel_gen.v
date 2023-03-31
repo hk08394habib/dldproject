@@ -1,78 +1,85 @@
 `timescale 1ns / 1ps
-module memory; //store screen in memory
-	reg [11:0] screen[9:0][9:0];
-endmodule
+module RAM_sync(clk_d, addr, din, dout, we); //create RAM to store RGB values 
+	parameter A = 20; //this gives the number of address BITS
+	parameter D = 12; //this is the number of data BITS. 12 bit since we want to store RGB values
 
-module pixel_create(input clk_d); //set defaults 
-	integer i,j;
-	initial begin 
-		for (i=0; i <= 9; i = i + 1) begin 
-			for (j=0; j <= 9; j = j + 1) begin 
-				if (i % 3 == 0)
-					memory.screen[i][j] = 12'b100000000001;
-				else if (j % 3 == 0) begin
-					memory.screen[i][j] = 12'b010101010101;
-				end else
-					memory.screen[i][j] = 12'b111111111111;
-				$write("%12b ", memory.screen[i][j]);
-			end 
-			$display("\n");
-			end
-			end
-endmodule
+	input clk_d;
+	input [A-1:0] addr;
+	input [D-1:0] din;
+	output reg [D-1:0] dout;
+	input we;
 
-module make_current_pixel(input clk_d, input [9:0] x_loc, input [9:0] y_loc, input video_on, output reg [3:0]red, output reg [3:0]green, output reg [3:0]blue);
-	reg [11:0] colors;
+	reg [D-1:0] memory [0:(1<<A)-1]; //create 2**A - 1 sized vector of width D
+		/*for (integer i = 0; i < 2000; i = i + 1) begin 
+			$display("%0h", memory[i]);
+		end*/
 	always @(posedge clk_d) begin
-		if (video_on == 1) begin //if video is supposed to be on, then read from memory
-			colors = memory.screen[x_loc][y_loc];
-			blue = colors[3:0];
-			green = colors[7:4];
-			red = colors[11:8];
-		end else begin //otherwise assign black 
-			blue <= 3'b000;
-			green <= 3'b000;
-			red <= 3'b000;
-		end
-		$display("%4b,%4b,%4b", red,green,blue);
-	end 
+		if (we) //write if given instruction to write 
+			memory[addr] <= din; 
+		dout <= memory[addr];//always send out the read value
+	end
 endmodule
 
-module t_cur_pix(); //test whether this works or not 
-	wire [3:0] red;
-	wire [3:0] green;
-	wire [3:0] blue;
-	reg [9:0] x_loc;
-	reg [9:0] y_loc;
-	reg video_on = 1;
-	reg clk;
-	wire clk_d;
-	reg [9:0] c1,c2;
-	reg stop = 0;
+module RAM_init(input clk_d);
+	//counting module 
+	wire trig_v;
+	wire [9:0]hcount;
+	wire [9:0]vcount;
 
-	initial begin 
-		clk = 1'b0;
+	h_counter counthorizontal(.clk(clk_d),.trig_v(trig_v),.count(hcount));
+	v_counter countvertical(.clk(clk_d),.enable_v(trig_v),.v_count(vcount));
+
+
+	//initialize and wire RAM
+	wire [19:0] ram_addr;//since we have 20 bit array 
+	wire [11:0] ram_read;//since the stored value is 12 bits
+	reg [11:0] ram_write = 4'b0000; //default write value for now
+	reg ram_writeenable = 1; //enable writing
+
+	//we need to iterate over the RAM
+	wire [9:0]row = hcount;
+	wire [9:0]column = vcount;
+	assign ram_addr = {row, column}; //hpos gives row vpos gives column
+	
+	RAM_sync raminit(.clk_d(clk_d),.dout(ram_read), .din(ram_write), .addr(ram_addr), .we(ram_writeenable));
+
+
+	always @(posedge clk_d) begin 
+		$display(ram_read, ram_write, ram_addr);
+		/*if (vcount == 480) begin
+			$display("done");
+			$finish;
+		end*/
 	end
-	always 
-		#5 clk <= ~clk;
-	initial 
-		#10000 $finish;
-	clk_div dividedclock(.clk(clk),.clk_d(clk_d));
-	pixel_create initiatepixels(.clk_d(clk_d));
-	reg start = 1;
-	always @(posedge clk) begin
-		if (start) begin
-			for (integer i = 0; i <= 9; i = i + 1) begin
-				for (integer j = 0; j <= 9; j = j + 1) begin
-					#100;
-					c1 = j;
-					c2 = i;
-					$display("%12b,%2d,%2d", memory.screen[c1][c2],c1,c2);
-				end
-				end
-		end else begin 
-			$display("stopped");
-		end
+
+	always @(posedge clk_d) begin
+		$display("hi");
 	end
-	make_current_pixel test(.clk_d(clk_d), .x_loc(c1), .y_loc(c2), .video_on(video_on), .red(red),.green(green),.blue(blue));
+
+endmodule
+
+module make_current_pixel(input clk_d, input [9:0] x_loc, input [9:0] y_loc, input video_on, output [3:0]red, output [3:0]green, output [3:0]blue);
+
+	wire [19:0] ram_addr;//since we have 20 bit array 
+	wire [11:0] ram_read;//since the stored value is 12 bits
+	reg [11:0] ram_write;//in case we need to write. no use for now. 
+	reg ram_writeenable = 0;
+
+	assign ram_addr = {row, column}; //hpos gives row vpos gives column
+
+	wire [9:0]row = x_loc;
+	wire [9:0]column = y_loc;
+	
+	RAM_init initializeram(.clk_d(clk_d));
+	RAM_sync ram(.clk_d(clk_d),.dout(ram_read), .din(ram_write), .addr(ram_addr), .we(ram_writeenable));
+
+	initial begin
+		$display("%12b",ram_read[11:0]);
+	end
+
+	wire [11:0] color = ram_read[11:0];
+	//when video_on is 0 then set rgb to black 
+	assign blue = color[3:0] && video_on;
+	assign green = color[7:4] && video_on;
+	assign red = color[11:7] && video_on;
 endmodule
