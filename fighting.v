@@ -5,7 +5,8 @@ module fighting(
 		input [15:0]sw,
 		output h_sync, 
 		output v_sync,
-		output [2:0]rgb);
+		output [2:0]rgb,
+		output [15:0]led);
 
 	wire video_on;
 	wire [9:0] hpos;
@@ -30,15 +31,14 @@ module fighting(
 	//display kick when button is pressed
 	wire p1kickbutton = sw[3];
 	wire p2kickbutton = sw[15];
-	//TODO: Build two drawbox functions (drawbox left, drawbox right)
-	reg signed [10:0] p1health = 10'sd300,p2health = 10'sd300;
-	reg [9:0]p1healthxpos = 0,p1healthypos=0,p2healthxpos=340,p2healthypos=0;
+	reg signed [10:0] p1health = 10'd300,p2health = 10'd300;
+	reg signed [10:0]p1healthxpos = 0,p1healthypos=0,p2healthxpos=10'd339,p2healthypos=0;
 	wire p1healthgfx,p2healthgfx;
 	wire [9:0] healthheight = 40;
 
 
-	drawbox p1healthbar(.xpos(p1healthxpos),.ypos(p1healthypos),.hpos(hpos),.vpos(vpos),.width(p1health[9:0]),.height(healthheight),.gfx(p1healthgfx));
-	drawbox p2healthbar(.xpos(p2healthxpos),.ypos(p2healthypos),.hpos(hpos),.vpos(vpos),.width(p2health[9:0]),.height(healthheight),.gfx(p2healthgfx));
+	drawbox p1healthbar(.xpos(p1healthxpos[9:0]),.ypos(p1healthypos[9:0]),.hpos(hpos),.vpos(vpos),.width(p1health[9:0]),.height(healthheight),.gfx(p1healthgfx));
+	drawbox p2healthbar(.xpos(p2healthxpos[9:0]),.ypos(p2healthypos[9:0]),.hpos(hpos),.vpos(vpos),.width(p2health[9:0]),.height(healthheight),.gfx(p2healthgfx));
 
 	//
 	//TODO: Perhaps create master display module with mux to create priority between
@@ -49,19 +49,12 @@ module fighting(
 	//
 	//
 	//
-	//TODO: Create reset button activated by sw[8] or when either health goes to
-	//0 
+	//TODO: Create reset activated by sw[8] or when either health goes to 0
 
 	gen_sync sync(.clk(clk),.h_sync(h_sync),.v_sync(v_sync), .video_on(video_on), .x_loc(hpos), .y_loc(vpos));
 
-	reg signed [10:0] interemv1;
-	reg signed [10:0] interemv2;
-
-	reg signed [10:0] interemh1;
-	reg signed [10:0] interemh2;
-
-	reg p1hitflag =0;
-	reg p2hitflag =0;
+	reg p1hitflag = 0;
+	reg p2hitflag = 0;
 
 	always @(posedge clk) begin //create one signal if player was hit in the current frame
 		if ((p1hit == 1) && (p1hitflag == 0)) 
@@ -86,18 +79,18 @@ module fighting(
 		if (( p2_vpos + dy2 + pheight< 480) && ( p2_vpos + dy2 > 0)) 
 		p2_vpos <= p2_vpos + dy2; 
 
-		//If hit then reduce health
-
-		if (p1hitflag) //If there was a hit this frame buffer, then redraw health wrt to it
-			p1health <= p1health - 11'd100;
-		if (p2hitflag) begin
-			p2health <= p2health - 11'd100;
-			p2healthxpos <= p2healthxpos + 11'd100;
-		end
-
 		p1hitflag = 0; //Reset hitflag
 		p2hitflag = 0;
+
 	end
+
+	always @(posedge p1hitflag) //not working for some reason 
+		//If hit then reduce health
+			p1health <= p1health - 11'd100;
+	always @(posedge p2hitflag) 
+			p2health <= p2health - 11'd100;
+			//p2healthxpos <= p2healthxpos + 11'd100;
+
 
 	//draw the players
 	reg signed [10:0] p1_hpos = 11'd300; 
@@ -106,8 +99,8 @@ module fighting(
 	reg signed [10:0] p2_hpos = 11'd400;
 	reg signed [10:0] p2_vpos = 11'd100;
 	
-	reg signed [10:0]pheight = 11'd200;
-	reg signed [10:0]pwidth = 11'd100;
+	reg signed [10:0] pheight = 11'd200;
+	reg signed [10:0] pwidth = 11'd100;
 
 
 	wire p1gfx,p2gfx;
@@ -120,15 +113,15 @@ module fighting(
 	//kicking
 	wire p1kickbg,p2kickbg;
 
-	reg [10:0]kheight = 20;
-	reg [10:0]kwidth = 100;
+	reg signed [10:0]kheight = 10'd20;
+	reg signed [10:0]kwidth = 10'd100;
 
 
-	wire [10:0]p1kick_hpos,p1kick_vpos;
+	wire signed [10:0]p1kick_hpos,p1kick_vpos;
 	assign p1kick_hpos = p1_hpos + pwidth;
 	assign p1kick_vpos = p1_vpos + pheight - kheight;
 
-	wire [10:0]p2kick_hpos,p2kick_vpos;
+	wire signed [10:0]p2kick_hpos,p2kick_vpos;
 	assign p2kick_hpos = p2_hpos - kwidth;
 	assign p2kick_vpos = p2_vpos + pheight - kheight;
 
@@ -150,12 +143,19 @@ module fighting(
 	assign p2hit = p1kickgfx && p2gfx;
 
 	//display gfx
+
 	wire r,g,b;
-	assign r = video_on && (((p1gfx || p2gfx) || (p1hit || p2hit)) || (p1healthgfx || p2healthgfx));
-	assign g = video_on  && (p1gfx || p2gfx) || (p1hit || p2hit);
-	assign b = video_on && ((p1kickgfx || p2kickgfx) || (p1hit || p2hit));
+	//TODO: make this a mux with ternary operator i.e. ?
+	/*assign r = video_on (((p1hit || p2hit)) || (p1healthgfx || p2healthgfx));
+	assign g = video_on  && (p1gfx);
+	assign b = video_on && (((p2gfx || p1kickgfx || p2kickgfx)));*/
+
+	assign r = video_on && (((p1hit || p2hit)) || (p1healthgfx || p2healthgfx));
+	assign g = video_on  && (p1gfx || p1kickgfx);
+	assign b = video_on && (((p2gfx || p2kickgfx)));
 
 	assign rgb = {b,g,r};
+
 endmodule
 
 
