@@ -5,7 +5,7 @@ module fighting(
 		input [15:0]sw,
 		output h_sync, 
 		output v_sync,
-		output [2:0]rgb,
+		output reg [11:0]rgb,
 		output [15:0]led);
 
 	wire video_on;
@@ -37,8 +37,8 @@ module fighting(
 	wire [9:0] healthheight = 40;
 
 
-	drawbox p1healthbar(.xpos(p1healthxpos[9:0]),.ypos(p1healthypos[9:0]),.hpos(hpos),.vpos(vpos),.width(p1health[9:0]),.height(healthheight),.gfx(p1healthgfx));
-	drawbox p2healthbar(.xpos(p2healthxpos[9:0]),.ypos(p2healthypos[9:0]),.hpos(hpos),.vpos(vpos),.width(p2health[9:0]),.height(healthheight),.gfx(p2healthgfx));
+	drawbox p1healthbar(.xpos(p1healthxpos),.ypos(p1healthypos),.hpos(hpos),.vpos(vpos),.width(p1health[9:0]),.height(healthheight),.gfx(p1healthgfx));
+	drawbox p2healthbar(.xpos(p2healthxpos),.ypos(p2healthypos),.hpos(hpos),.vpos(vpos),.width(p2health[9:0]),.height(healthheight),.gfx(p2healthgfx));
 
 	//
 	//TODO: Perhaps create master display module with mux to create priority between
@@ -51,7 +51,7 @@ module fighting(
 	//
 	//TODO: Create reset activated by sw[8] or when either health goes to 0
 
-	gen_sync sync(.clk(clk),.h_sync(h_sync),.v_sync(v_sync), .video_on(video_on), .x_loc(hpos), .y_loc(vpos));
+	gen_sync sync(.clk(clk),.h_sync(h_sync),.v_sync(v_sync), .video_on(video_on), .x_loc(hpos[9:0]), .y_loc(vpos[9:0]));
 
 	reg p1hitflag = 0;
 	reg p2hitflag = 0;
@@ -105,8 +105,12 @@ module fighting(
 
 	wire p1gfx,p2gfx;
 
-	drawbox p1(.xpos(p1_hpos[9:0]),.ypos(p1_vpos[9:0]),.hpos(hpos),.vpos(vpos),.width(pwidth[9:0]),.height(pheight[9:0]),.gfx(p1gfx));
-	drawbox p2(.xpos(p2_hpos[9:0]),.ypos(p2_vpos[9:0]),.hpos(hpos),.vpos(vpos),.width(pwidth[9:0]),.height(pheight[9:0]),.gfx(p2gfx));
+
+	wire [11:0]p1gfxrgb;
+	wire [11:0]p2gfxrgb;
+
+	wrapper p1(.clk(clk),.sprite_x(p1_hpos),.sprite_y(p1_vpos), .x(hpos),.y(vpos),.rgb(p1gfxrgb),.sprite_on(p1gfx));
+	wrapper p2(.clk(clk),.sprite_x(p2_hpos),.sprite_y(p2_vpos), .x(hpos),.y(vpos),.rgb(p2gfxrgb),.sprite_on(p2gfx));
 
 	//TODO: Add punching
 
@@ -125,8 +129,8 @@ module fighting(
 	assign p2kick_hpos = p2_hpos - kwidth;
 	assign p2kick_vpos = p2_vpos + pheight - kheight;
 
-	drawbox p1kick(.xpos(p1kick_hpos[9:0]),.ypos(p1kick_vpos[9:0]),.hpos(hpos),.vpos(vpos),.width(kwidth[9:0]),.height(kheight[9:0]),.gfx(p1kickbg));
-	drawbox p2kick(.xpos(p2kick_hpos[9:0]),.ypos(p2kick_vpos[9:0]),.hpos(hpos),.vpos(vpos),.width(kwidth[9:0]),.height(kheight[9:0]),.gfx(p2kickbg));
+	drawbox p1kick(.xpos(p1kick_hpos),.ypos(p1kick_vpos),.hpos(hpos),.vpos(vpos),.width(kwidth[9:0]),.height(kheight[9:0]),.gfx(p1kickbg));
+	drawbox p2kick(.xpos(p2kick_hpos),.ypos(p2kick_vpos),.hpos(hpos),.vpos(vpos),.width(kwidth[9:0]),.height(kheight[9:0]),.gfx(p2kickbg));
 	
 	
 	wire p1kickgfx;
@@ -144,18 +148,26 @@ module fighting(
 
 	//display gfx
 
-	wire r,g,b;
-	//TODO: make this a mux with ternary operator i.e. ?
-	/*assign r = video_on (((p1hit || p2hit)) || (p1healthgfx || p2healthgfx));
-	assign g = video_on  && (p1gfx);
-	assign b = video_on && (((p2gfx || p1kickgfx || p2kickgfx)));*/
-
-	assign r = video_on && (((p1hit || p2hit)) || (p1healthgfx || p2healthgfx));
-	assign g = video_on  && (p1gfx || p1kickgfx);
-	assign b = video_on && (((p2gfx || p2kickgfx)));
-
-	assign rgb = {b,g,r};
-
+	always @(posedge clk)
+		if (video_on == 1) begin
+			if (p1hitflag || p2hitflag) begin
+				rgb <= 12'b101010101010;
+			end else begin
+					if (p1gfx && p1gfxrgb !== 12'hFFF) 
+						rgb <= p1gfxrgb;
+					else if (p2gfx && p2gfxrgb !== 12'hFFF) 
+						rgb <= p2gfxrgb;
+					else if (p1healthgfx || p2healthgfx) 
+						rgb <= 12'b000000001111;
+					else if (p1kickgfx || p2kickgfx)
+						rgb <= 12'b000000001111;
+					else begin
+						rgb <= 12'b000001000100;
+					end
+		end
+	end else begin 
+		rgb <= 12'b0;
+	end
 endmodule
 
 
@@ -186,7 +198,7 @@ module moving(
 
 				default : begin //by default, you have gravity pulling down on you (increasing y corresponds to moving downwards)
 					dx <= 11'd0;
-					dy <= 11'd1;
+					dy <= 11'd2;
 				end
 
 			endcase
