@@ -10,9 +10,9 @@ module drawbox(
 	input [9:0]height,
 	output gfx);
 	
-	wire [9:0]hdiff = hpos - xpos;
-	wire [9:0]vdiff = vpos - ypos;
+	wire signed [10:0]hdiff = hpos - xpos;
+	wire signed [10:0]vdiff = vpos - ypos;
 
-	assign gfx = (hdiff < width) && (vdiff < height);
+	assign gfx = (hdiff[9:0] < width && hdiff > 0) && (vdiff[9:0] < height && vdiff > 0);
 endmodule
 

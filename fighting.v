@@ -12,27 +12,24 @@ module fighting(
 	wire [9:0] hpos;
 	wire [9:0] vpos;
 
+	assign led[0] = kingkicked;
+	assign led[15] = leekicked;
+
+	assign led[1] = kinghitflag;
+	assign led[14] = leehitflag;
+
+	assign led[2] = kinghit;
+	assign led[13] = leehit;
+
+	assign led[8] = endflag;
+
 	wire signed [10:0]dx1,dy1;
 	wire signed [10:0]dx2,dy2;
+	
 
-	//switches as seperate controls 
-	moving movelogicp1(
-		.clk(clk),
-		.sw(sw[2:0]), //right side of board is p1
-		.dx(dx1),
-		.dy(dy1));
-
-	moving movelogicp2(
-		.clk(clk),
-		.sw(sw[14:12]), //left side of board is p2
-		.dx(dx2),
-		.dy(dy2));
-
-	//display kick when button is pressed
-	wire p1kickbutton = sw[3];
-	wire p2kickbutton = sw[15];
-	reg signed [10:0] p1health = 10'd300,p2health = 10'd300;
-	reg signed [10:0]p1healthxpos = 0,p1healthypos=0,p2healthxpos=10'd339,p2healthypos=0;
+	//HEALTH
+	reg signed [10:0] p1health = 11'd300,p2health = 11'd300;
+	reg signed [10:0]p1healthxpos = 0,p1healthypos=0,p2healthxpos=11'd339,p2healthypos=0;
 	wire p1healthgfx,p2healthgfx;
 	wire [9:0] healthheight = 40;
 
@@ -40,129 +37,126 @@ module fighting(
 	drawbox p1healthbar(.xpos(p1healthxpos),.ypos(p1healthypos),.hpos(hpos),.vpos(vpos),.width(p1health[9:0]),.height(healthheight),.gfx(p1healthgfx));
 	drawbox p2healthbar(.xpos(p2healthxpos),.ypos(p2healthypos),.hpos(hpos),.vpos(vpos),.width(p2health[9:0]),.height(healthheight),.gfx(p2healthgfx));
 
-	//
-	//TODO: Perhaps create master display module with mux to create priority between
-	//display modules. Thus modules only have to send their personal display and
-	//it will be handled by the master module.
-	//
-	//This will allow for more modularity and also backgrounds and sprites
-	//
-	//
-	//
-	//TODO: Create reset activated by sw[8] or when either health goes to 0
+	reg [20:0]leeHitFlagCooldown = 0;
+	reg [20:0]KingHitFlagCooldown = 0;
 
-	gen_sync sync(.clk(clk),.h_sync(h_sync),.v_sync(v_sync), .video_on(video_on), .x_loc(hpos[9:0]), .y_loc(vpos[9:0]));
+	always @(posedge clk) begin
 
-	reg p1hitflag = 0;
-	reg p2hitflag = 0;
+		if ((kinghit == 1)) 
+			kinghitflag = 1;
+		if ((leehit == 1)) 
+			leehitflag = 1;
 
-	always @(posedge clk) begin //create one signal if player was hit in the current frame
-		if ((p1hit == 1) && (p1hitflag == 0)) 
-			p1hitflag = 1;
-		if ((p2hit == 1) && (p2hitflag == 0)) 
-			p2hitflag = 1;
+		if (leehitflag)
+			leeHitFlagCooldown <= leeHitFlagCooldown + 1;
+		if (kinghitflag)
+			KingHitFlagCooldown <= KingHitFlagCooldown + 1;
 	end
 
+	always @(negedge leeHitFlagCooldown[20])
+		leehitflag = 0;
+		
+	always @(negedge KingHitFlagCooldown[20])
+		kinghitflag = 0;
+		
+	wire endflag;
+	assign endflag = (p1health <=0 || p2health <=0) ? 1 : 0 ;
+
+	always @(posedge kinghitflag)
+			p1health <= p1health - 11'd100;
+	always @(posedge leehitflag)  begin
+			p2health <= p2health - 11'd100;
+			p2healthxpos <= p2healthxpos + 11'd100;
+		end
+
+	gen_sync sync(.clk(clk),.h_sync(h_sync),.v_sync(v_sync), .video_on(video_on), .x_loc(hpos), .y_loc(vpos));
+
+	reg kinghitflag = 0;
+	reg leehitflag = 0;
+
+	//MOVEMENT	
+	wire kingkicked,leekicked;
+	moving movelogicp1(
+		.clk(clk),
+		.sw(sw[3:0]), //right side of board is p1
+		.dx(dx1),
+		.dy(dy1),
+		.kickon(kingkicked));
+
+	moving movelogicp2(
+		.clk(clk),
+		.sw(sw[15:12]), //left side of board is p2
+		.dx(dx2),
+		.dy(dy2),
+		.kickon(leekicked));
 
 	always @(negedge v_sync)
 	begin
+		if ((kingx + dx1 + 200 < 640) && (kingx + dx1> 0)) 
+		kingx <= kingx + dx1;
+		if ((leex + dx2 + 200< 640) && (leex + dx2> 0)) 
+		leex <= leex + dx2;
 
-		//No collisions with borders
-		
-		if ((p1_hpos + dx1 + pwidth< 640) && (p1_hpos + dx1> 0)) 
-		p1_hpos <= p1_hpos + dx1;
-		if ((p2_hpos + dx2 + pwidth< 640) && (p2_hpos + dx2> 0)) 
-		p2_hpos <= p2_hpos + dx2;
-
-		if (( p1_vpos + dy1 + pheight< 480) && ( p1_vpos + dy1 > 0)) 
-		p1_vpos <= p1_vpos + dy1; 
-		if (( p2_vpos + dy2 + pheight< 480) && ( p2_vpos + dy2 > 0)) 
-		p2_vpos <= p2_vpos + dy2; 
-
-		p1hitflag = 0; //Reset hitflag
-		p2hitflag = 0;
-
+		if (( kingy + dy1 + 200< 480) && ( kingy + dy1 > 0)) 
+		kingy <= kingy + dy1; 
+		if (( leey + dy2 + 200< 480) && ( leey + dy2 > 0)) 
+		leey <= leey + dy2; 
 	end
 
-	always @(posedge p1hitflag) //not working for some reason 
-		//If hit then reduce health
-			p1health <= p1health - 11'd100;
-	always @(posedge p2hitflag) 
-			p2health <= p2health - 11'd100;
-			//p2healthxpos <= p2healthxpos + 11'd100;
 
+	//PLAYERS DRAW
+	reg signed [10:0] kingx = 11'd300; 
+	reg signed [10:0] kingy = 11'd100;
 
-	//draw the players
-	reg signed [10:0] p1_hpos = 11'd300; 
-	reg signed [10:0] p1_vpos = 11'd100;
-
-	reg signed [10:0] p2_hpos = 11'd400;
-	reg signed [10:0] p2_vpos = 11'd100;
+	reg signed [10:0] leex = 11'd400;
+	reg signed [10:0] leey = 11'd100;
 	
-	reg signed [10:0] pheight = 11'd200;
-	reg signed [10:0] pwidth = 11'd100;
+	wire availkingkickon,availkingneutral;
+	wire availleekick,availleeneutral;
+
+	wire [11:0]kingkickgfx;
+	wire [11:0]leekickgfx;
+	wire [11:0]kingneutralgfx;
+	wire [11:0]leeneutralgfx;
+
+	wire kinghit,leehit;
+
+	kingneutral_wrapper kingidling(.clk(clk),.sprite_x(kingx),.sprite_y(kingy), .x(hpos),.y(vpos),.rgb(kingneutralgfx),.sprite_on(availkingneutral));
+	leeneutral_wrapper leeidling(.clk(clk),.sprite_x(leex),.sprite_y(leey), .x(hpos),.y(vpos),.rgb(leeneutralgfx),.sprite_on(availleeneutral));
+
+	kingkick_wrapper kingkicking(.clk(clk),.sprite_x(kingx),.sprite_y(kingy), .x(hpos),.y(vpos),.rgb(kingkickgfx),.sprite_on(availkingkick));
+	leekick_wrapper leekicking(.clk(clk),.sprite_x(leex),.sprite_y(leey), .x(hpos),.y(vpos),.rgb(leekickgfx),.sprite_on(availleekick));
+
+	wire [11:0]kingrgbgfx,leergbgfx;
+	wire kinggfx,leegfx;
 
 
-	wire p1gfx,p2gfx;
+	assign kingrgbgfx = (kingkicked) ? (kingkickgfx) : (kingneutralgfx);
+	assign leergbgfx = (leekicked) ? (leekickgfx) : (leeneutralgfx);
+	
+	assign kinggfx = (kingkicked) ? (availkingkick) : (availkingneutral);
+	assign leegfx = (leekicked) ? (availleekick) : (availleeneutral);
 
-
-	wire [11:0]p1gfxrgb;
-	wire [11:0]p2gfxrgb;
-
-	wrapper p1(.clk(clk),.sprite_x(p1_hpos),.sprite_y(p1_vpos), .x(hpos),.y(vpos),.rgb(p1gfxrgb),.sprite_on(p1gfx));
-	wrapper p2(.clk(clk),.sprite_x(p2_hpos),.sprite_y(p2_vpos), .x(hpos),.y(vpos),.rgb(p2gfxrgb),.sprite_on(p2gfx));
-
-	//TODO: Add punching
-
-	//kicking
-	wire p1kickbg,p2kickbg;
-
-	reg signed [10:0]kheight = 10'd20;
-	reg signed [10:0]kwidth = 10'd100;
-
-
-	wire signed [10:0]p1kick_hpos,p1kick_vpos;
-	assign p1kick_hpos = p1_hpos + pwidth;
-	assign p1kick_vpos = p1_vpos + pheight - kheight;
-
-	wire signed [10:0]p2kick_hpos,p2kick_vpos;
-	assign p2kick_hpos = p2_hpos - kwidth;
-	assign p2kick_vpos = p2_vpos + pheight - kheight;
-
-	drawbox p1kick(.xpos(p1kick_hpos),.ypos(p1kick_vpos),.hpos(hpos),.vpos(vpos),.width(kwidth[9:0]),.height(kheight[9:0]),.gfx(p1kickbg));
-	drawbox p2kick(.xpos(p2kick_hpos),.ypos(p2kick_vpos),.hpos(hpos),.vpos(vpos),.width(kwidth[9:0]),.height(kheight[9:0]),.gfx(p2kickbg));
+	assign kinghit = leekicked && availleekick && kinggfx;
+	assign leehit = kingkicked && availkingkick && leegfx;
 	
 	
-	wire p1kickgfx;
-	assign p1kickgfx = p1kickbutton && p1kickbg;
-	
-	wire p2kickgfx;
-	assign p2kickgfx = p2kickbutton && p2kickbg;
-	
-	//hit detection 
-	wire p1hit;
-	assign p1hit = p2kickgfx && p1gfx;
+	//GFX
 
-	wire p2hit;
-	assign p2hit = p1kickgfx && p2gfx;
-
-	//display gfx
-
+	//TODO: Set game over screen when health goes to 0
 	always @(posedge clk)
-		if (video_on == 1) begin
-			if (p1hitflag || p2hitflag) begin
-				rgb <= 12'b101010101010;
+		if (video_on == 1 ) begin
+			if (leehitflag || kinghitflag) begin
+				rgb <= 12'b000000101010;
 			end else begin
-					if (p1gfx && p1gfxrgb !== 12'hFFF) 
-						rgb <= p1gfxrgb;
-					else if (p2gfx && p2gfxrgb !== 12'hFFF) 
-						rgb <= p2gfxrgb;
+					if (kinggfx && kingrgbgfx != 12'b110001111101) 
+						rgb <= kingrgbgfx;
+					else if (leegfx && leergbgfx != 12'b110001111101)
+						rgb <= leergbgfx;
 					else if (p1healthgfx || p2healthgfx) 
 						rgb <= 12'b000000001111;
-					else if (p1kickgfx || p2kickgfx)
-						rgb <= 12'b000000001111;
 					else begin
-						rgb <= 12'b000001000100;
+						rgb <= 12'b100101010111;
 					end
 		end
 	end else begin 
@@ -171,37 +165,3 @@ module fighting(
 endmodule
 
 
-
-module moving(
-		input clk,
-		input [2:0]sw,
-		output reg [10:0]dx,
-		output reg [10:0]dy);
-
-		always @(posedge clk)
-		begin
-			case (sw)
-				4'b001 : begin
-					dx <= 11'd1;
-					dy <= 11'd1;
-				end
-
-				4'b010 : begin
-					dx <= -11'd1;
-					dy <= 11'd1;
-				end
-
-				4'b100 : begin
-					dx <= 11'd0;
-					dy <= -11'd5;
-				end
-
-				default : begin //by default, you have gravity pulling down on you (increasing y corresponds to moving downwards)
-					dx <= 11'd0;
-					dy <= 11'd2;
-				end
-
-			endcase
-
-		end
-	endmodule
