@@ -136,19 +136,21 @@ module fighting(
 	end
 
 	always @(posedge clk) begin
-		case (flip) begin
+		case (flip) 
 
 				0: begin
         Address_in <= 8'h16;
         //Vrx <= data[15:12];
         //Vry <= 4'b0;
-				if (data[15:12] > 8):
+				if (data[15:12] > 8) begin
 					dx1 <= 11'd1;
 					leekicked <= 0;
-				if (data[15:12] < 8):
+				end
+				if (data[15:12] < 8) begin
 					dx1 <= -11'd1;
 					leekicked <= 0;
-				if (data[15:12] == 8):
+				end
+				if (data[15:12] == 8)
 					dx1 <= 0;
 					leekicked <=0;
         end
@@ -157,45 +159,53 @@ module fighting(
         Address_in <= 8'h1e;
         //Vry<=data[15:12];
         //Vrx<=4'b0;
-				if (data[15:12] > 8):
+				if (data[15:12] > 8) begin
 					dy1 <= 11'd1;
 					leekicked <= 0;
-				if (data[15:12] < 8):
+				end
+				if (data[15:12] < 8)
 					leekicked <= 1;
-				if (data[15:12] == 8):
+				if (data[15:12] == 8) begin
 					dy1 <= 11'd5;
 					leekicked <= 0;
+				end
         end
 
 				2: begin
         Address_in <= 8'h17;
         //Vrx <= data[15:12];
         //Vry <= 4'b0;
-				if (data[15:12] > 8):
+				if (data[15:12] > 8) begin
 					dx2 <= 11'd1;
 					kingkicked <= 0;
-				if (data[15:12] < 8):
+				end
+				if (data[15:12] < 8) begin
 					dx2 <= -11'd1;
 					kingkicked <= 0;
-				if (data[15:12] == 8):
+				end
+				if (data[15:12] == 8) begin
 					dx2 <= 0;
 					kingkicked <= 0;
+				end
         end
         
         3: begin
         Address_in <= 8'h1f;
         //Vry<=data[15:12];
         //Vrx<=4'b0;
-				if (data[15:12] > 8):
+				if (data[15:12] > 8) begin
 					dy2 <= 11'd1;
 					kingkicked <= 0;
-				if (data[15:12] < 8):
+				end
+				if (data[15:12] < 8) begin
 					dy2 <= -11'd1
 					kingkicked <= 1;
-				if (data[15:12] == 8):
+				end
+				if (data[15:12] == 8) begin
 					dy2 <= 11'd5;
 					kingkicked <= 0;
-        end
+				end
+		endcase
 
 		end
 
