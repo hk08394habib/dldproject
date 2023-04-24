@@ -2,11 +2,21 @@
 
 module fighting(
 		input clk,
-		input [15:0]sw,
+		input vauxp6,
+	  input vauxn6,
+	  input vauxp7,
+	  input vauxn7,
+    input vauxp15,
+    input vauxn15,
+    input vauxp14,
+    input vauxn14,
 		output h_sync, 
 		output v_sync,
 		output reg [11:0]rgb,
 		output [15:0]led);
+///////// XADC
+//
+
 
 	wire video_on;
 	wire [9:0] hpos;
@@ -78,12 +88,46 @@ module fighting(
 	//
 	//
 	
+   
+   wire enable;  
+   wire ready;
+   wire [15:0] data;   
+   reg [6:0] Address_in;     
+   
+
+
+   xadc_wiz_0  XLXI_7 (.daddr_in(Address_in), //addresses can be found in the artix 7 XADC user guide DRP register space
+                     .dclk_in(clk), 
+                     .den_in(enable), 
+                     .di_in(), 
+                     .dwe_in(), 
+                     .busy_out(),                    
+                     .vauxp6(vauxp6),
+                     .vauxn6(vauxn6),
+                     .vauxp7(vauxp7),
+                     .vauxn7(vauxn7),
+                     .vauxp14(vauxp14),
+                     .vauxn14(vauxn14),
+                     .vauxp15(vauxp15),
+                     .vauxn15(vauxn15),
+                     .vn_in(), 
+                     .vp_in(), 
+                     .alarm_out(), 
+                     .do_out(data), 
+                     //.reset_in(),
+                     .eoc_out(enable),
+                     .channel_out(),
+                     .drdy_out(ready));
+                     
+         
+    
 	reg [1:0]flip=0;
 	reg [32:0]delay=0;
 
+	wire leekicked,kingkicked;
 
 	
-	always @(posedge(CLK100MHZ)) begin
+	always @(posedge clk) begin
 		if (delay == 1000000000) begin
 		flip = flip + 1;
 		delay = 0;
@@ -91,7 +135,7 @@ module fighting(
 		delay = delay + 1;
 	end
 
-	always @(posedge(CLK100MHZ)) begin
+	always @(posedge clk) begin
 		case (flip) begin
 
 				0: begin
@@ -106,6 +150,7 @@ module fighting(
 					leekicked <= 0;
 				if (data[15:12] == 8):
 					dx1 <= 0;
+					leekicked <=0;
         end
         
         1: begin
@@ -134,6 +179,7 @@ module fighting(
 					kingkicked <= 0;
 				if (data[15:12] == 8):
 					dx2 <= 0;
+					kingkicked <= 0;
         end
         
         3: begin
