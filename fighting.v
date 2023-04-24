@@ -75,20 +75,86 @@ module fighting(
 	reg leehitflag = 0;
 
 	//MOVEMENT	
-	wire kingkicked,leekicked;
-	moving movelogicp1(
-		.clk(clk),
-		.sw(sw[3:0]), //right side of board is p1
-		.dx(dx1),
-		.dy(dy1),
-		.kickon(kingkicked));
+	//
+	//
+	
+	reg [1:0]flip=0;
+	reg [32:0]delay=0;
 
-	moving movelogicp2(
-		.clk(clk),
-		.sw(sw[15:12]), //left side of board is p2
-		.dx(dx2),
-		.dy(dy2),
-		.kickon(leekicked));
+
+	
+	always @(posedge(CLK100MHZ)) begin
+		if (delay == 1000000000) begin
+		flip = flip + 1;
+		delay = 0;
+	end else
+		delay = delay + 1;
+	end
+
+	always @(posedge(CLK100MHZ)) begin
+		case (flip) begin
+
+				0: begin
+        Address_in <= 8'h16;
+        //Vrx <= data[15:12];
+        //Vry <= 4'b0;
+				if (data[15:12] > 8):
+					dx1 <= 11'd1;
+					leekicked <= 0;
+				if (data[15:12] < 8):
+					dx1 <= -11'd1;
+					leekicked <= 0;
+				if (data[15:12] == 8):
+					dx1 <= 0;
+        end
+        
+        1: begin
+        Address_in <= 8'h1e;
+        //Vry<=data[15:12];
+        //Vrx<=4'b0;
+				if (data[15:12] > 8):
+					dy1 <= 11'd1;
+					leekicked <= 0;
+				if (data[15:12] < 8):
+					leekicked <= 1;
+				if (data[15:12] == 8):
+					dy1 <= 11'd5;
+					leekicked <= 0;
+        end
+
+				2: begin
+        Address_in <= 8'h17;
+        //Vrx <= data[15:12];
+        //Vry <= 4'b0;
+				if (data[15:12] > 8):
+					dx2 <= 11'd1;
+					kingkicked <= 0;
+				if (data[15:12] < 8):
+					dx2 <= -11'd1;
+					kingkicked <= 0;
+				if (data[15:12] == 8):
+					dx2 <= 0;
+        end
+        
+        3: begin
+        Address_in <= 8'h1f;
+        //Vry<=data[15:12];
+        //Vrx<=4'b0;
+				if (data[15:12] > 8):
+					dy2 <= 11'd1;
+					kingkicked <= 0;
+				if (data[15:12] < 8):
+					dy2 <= -11'd1
+					kingkicked <= 1;
+				if (data[15:12] == 8):
+					dy2 <= 11'd5;
+					kingkicked <= 0;
+        end
+
+		end
+
+	end
+
 
 	always @(negedge v_sync)
 	begin
@@ -163,5 +229,3 @@ module fighting(
 		rgb <= 12'b0;
 	end
 endmodule
-
-
