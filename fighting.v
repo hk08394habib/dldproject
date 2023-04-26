@@ -15,24 +15,28 @@ module fighting(
 	assign led[0] = kingkicked;
 	assign led[15] = leekicked;
 
-	assign led[1] = kinghitflag;
-	assign led[14] = leehitflag;
+	assign led[1] = triggerKingInvincible;
+	assign led[14] = triggerLeeInvincible;
 
 	assign led[2] = kinghit;
 	assign led[13] = leehit;
 
-	assign led[3] = kingIsInvincible;
-	assign led[12] = leeIsInvincible;
+	assign led[3] = kingInvincible;
+	assign led[12] = leeInvincible;
 
 	reg endflag = 0;
 	
 	assign led[8] = endflag;
 
+	reg triggerKingInvincible = 0;
+	reg triggerLeeInvincible = 0;
+
 	wire signed [10:0]dx1,dy1;
 	wire signed [10:0]dx2,dy2;
 	
+	wire kinghit,leehit;
 
-	wire kingkicked,leekicked;
+	wire kingkicked ,leekicked ;
 	moving movelogicp1(
 		.clk(clk),
 		.sw(sw[3:0]), //right side of board is p1
@@ -49,8 +53,8 @@ module fighting(
 
 	//display kick when button is pressed
 	//TODO: Set game over screen when health goes to 0
-	reg signed [10:0] p1health = 11'd300,p2health = 11'd300;
-	reg signed [10:0]p1healthxpos = 0,p1healthypos=0,p2healthxpos=11'd339,p2healthypos=0;
+	reg signed [10:0] p1health = 11'd400,p2health = 11'd400;
+	reg signed [10:0]p1healthxpos = 0,p1healthypos=0,p2healthxpos=11'd239,p2healthypos=0;
 	wire p1healthgfx,p2healthgfx;
 	wire [9:0] healthheight = 40;
 
@@ -62,63 +66,45 @@ module fighting(
 
 	gen_sync sync(.clk(clk),.h_sync(h_sync),.v_sync(v_sync), .video_on(video_on), .x_loc(hpos), .y_loc(vpos));
 
-	wire clk_d1;
-	wire clk_d2;
-	wire clk_d3;
-	wire clk_d4;
-	wire clk_d5;
-	clk_div clockdiveder(.clk(clk),.clk_d(clk_d1));
-	clk_div clockdiveder1(.clk(clk_d1),.clk_d(clk_d2));
-	clk_div clockdiveder2(.clk(clk_d2),.clk_d(clk_d3));
-	clk_div clockdiveder3(.clk(clk_d3),.clk_d(clk_d4));
-	clk_div clockdiveder4(.clk(clk_d4),.clk_d(clk_d5));
 
-	reg kinghitflag = 0;
-	reg leehitflag = 0;
+	wire kingInvincible;
+	wire leeInvincible;
 
-	wire [23:0]leeInvincible;
-	wire [23:0]kingInvincible;
-	wire leeIsInvincible;
-	wire kingIsInvincible;
 
-	downCounter kingInvincibility(.clk(clk_d5),.trig(kinghitflag),.count(kingInvincible), .doCount(kingIsInvincible));
-	downCounter leeInvincibility(.clk(clk_d5),.trig(leehitflag),.count(leeInvincible), .doCount(leeIsInvincible));
+	//CHANGE COUNTING TO V_SYNC CURRENTLY CONFIGURED FOR SIMULATION PURPOSES
+	lock kingInvincibility(.trig(triggerKingInvincible),.counting(v_sync),.enableLock(kingInvincible));
+	lock leeInvincibility(.trig(triggerLeeInvincible),.counting(v_sync),.enableLock(leeInvincible));
 
-	always @(posedge clk) begin 
-		if ((kinghit == 1)) begin
-			if (kingIsInvincible != 1) begin
+	wire hurtKing;
+	wire hurtLee;
 
-				if (300>= p1health &&  p1health > 100) begin 
-					p1health <= p1health - 11'd100;
-					kinghitflag <= 1;
 
-				end else if (p1health <= 100) begin
-					endflag <= 1;
-				end
+	//Do the same thing for "kingDoKick = (~kingCanKick) && availkingkick && kingkicked", in the mvmt module set a flag to do jump don't actually
+	//In order to do this we use defparam (ideally)
+	assign hurtKing = (~kingInvincible) && kinghit;
+	assign hurtLee = (~leeInvincible) && leehit;
+
+	always @(posedge hurtKing) begin 
+				if (p1health > 0) begin 
+					p1health = p1health - 11'd100;
+					triggerKingInvincible = 1;
+				end else if (p1health <= 0) begin
+					endflag = 1;
 		end
+		triggerKingInvincible = 0;
 	end
 
-		if ((leehit == 1)) begin
-			if (leeIsInvincible != 1) begin
-
-				if (300>= p2health &&  p2health > 100 && p2healthxpos < 639) begin 
-					p2health <= p2health - 11'd100;
-					p2healthxpos <= p2healthxpos + 11'd100;
-					leehitflag <= 1;
-
-				end else if (p2health <= 100 || p2healthxpos >= 639) begin
-					endflag <= 1;
-				end
+	always @(posedge hurtLee) begin
+				if (p2health > 0 && p2healthxpos < 639) begin 
+					p2health = p2health - 11'd100;
+					p2healthxpos = p2healthxpos + 11'd100;
+					triggerLeeInvincible = 1;
+				end else if (p2health <= 0 || p2healthxpos >= 639) begin
+					endflag = 1;
 		end
+		triggerLeeInvincible = 0;
 	end
-end
 
-
-	always @(negedge kingIsInvincible) 
-		kinghitflag = 0;
-
-	always @(negedge leeIsInvincible) 
-		leehitflag = 0;
 
 	always @(negedge v_sync)
 	begin
@@ -133,6 +119,7 @@ end
 		if (( leey + dy2 + 200< 480) && ( leey + dy2 > 0)) 
 		leey <= leey + dy2; 
 
+
 	end
 
 
@@ -141,7 +128,7 @@ end
 	reg signed [10:0] kingx = 11'd300; 
 	reg signed [10:0] kingy = 11'd100;
 
-	reg signed [10:0] leex = 11'd400;
+	reg signed [10:0] leex = 11'd300;
 	reg signed [10:0] leey = 11'd100;
 	
 	wire availkingkick,availkingneutral;
@@ -152,7 +139,6 @@ end
 	wire [11:0]kingneutralgfx;
 	wire [11:0]leeneutralgfx;
 
-	wire kinghit,leehit;
 
 	kingneutral_wrapper kingidling(.clk(clk),.sprite_x(kingx),.sprite_y(kingy), .x(hpos),.y(vpos),.rgb(kingneutralgfx),.sprite_on(availkingneutral));
 	leeneutral_wrapper leeidling(.clk(clk),.sprite_x(leex),.sprite_y(leey), .x(hpos),.y(vpos),.rgb(leeneutralgfx),.sprite_on(availleeneutral));
@@ -180,12 +166,12 @@ end
 		if (video_on == 1) begin
 
 				if (kinggfx && kingrgbgfx != 12'b110001111101)  begin
-					if (kingIsInvincible) //time left for king to stay invincible
+					if (kingInvincible == 1) 
 						rgb <= 12'b111111111111;
 					else
 						rgb <= kingrgbgfx;
 				end else if (leegfx && leergbgfx != 12'b110001111101) begin
-					if (leeIsInvincible) 
+					if (leeInvincible == 1) 
 						rgb <= 12'b111111111111;
 					else
 						rgb <= leergbgfx;
