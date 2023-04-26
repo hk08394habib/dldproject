@@ -20,25 +20,67 @@ module downCounter(
 
 endmodule
 */
+/*
 module downCounter(
 	input clk,
 	input trig,
-	output reg [23:0]count = 24'hFFFFFF,
-	output reg doCount = 0);
+	output done);
 	
+	reg countDown = 0
+	reg [63:0]count = 64'hFFFFFFFFFFFFFFFF;
+
+	assign done = ~countDown;
+
 	always @(posedge clk) begin 
-		if (trig)
-			doCount = 1;
-		if (doCount)
-			count = count -1;
-		if (count == 0) begin
-			doCount = 0;
-			count = 24'hFFFFFF;
+
+		if (trig == 1) begin
+
+			countDown = 1;
+			
 		end
+
+		if (countDown == 1) begin
+			
+			count = count - 64'h1;
+
+		end
+
+		if (count == 0) begin
+
+			countDown = 0;
+			count = 64'hFFFFFFFFFFFFFFFF;
+
+		end
+
+	end 
+endmodule*/
+
+module lock(
+	input counting,
+	input trig,
+	output reg enableLock = 0);
+
+	reg [11:0]count = 0;
+	
+	reg countFlag = 0;
+
+	always @(posedge trig) begin
+		enableLock <= 1;
+		countFlag <= 1;
+	end
+
+	always @(posedge counting) begin 
+
+		if (countFlag) 
+			count <= count + 1;
+
+		if (count == 1000) begin
+
+			enableLock <= 0;
+			count <= 0;
+			countFlag <= 0;
+		end
+
 	end 
 
 endmodule
-
-
-
-
